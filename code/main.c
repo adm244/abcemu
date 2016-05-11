@@ -54,13 +54,28 @@ INSTRUCTIONS:
   (IMPLEMENTED) NEGS - changes sign of a register value (N, Z, C, V)
   (IMPLEMENTED) MVNS - bitwise not of a register value (N, Z)
   (IMPLEMENTED) NOP - does nothing
+
+PROCEDURES (HACKED):
+  OS supervisor calls:
+  
+  (IMPLEMENTED) PUTC - writes character from r0 to a console at current position
+  (IMPLEMENTED) PUTCXY - writes character from r2 to a console at x = r0 and y = r1 (x, y are lower 8 bits)
+  (IMPLEMENTED) GETC - reads character from a console at current position and stores it in r0
+  (IMPLEMENTED) GETCXY - reads character from a console at x = r0 and y = r1 and stores it in r0 (x, y are lower 8 bits)
+  (IMPLEMENTED) SETCUR - sets a console cursor position at x = r0 and y = r1 (x, y are lower 8 bits)
+  (IMPLEMENTED) GETCUR - gets a console cursor position and stores it in r0 = x and r1 = y
+  GETKEY - waits for a keypress and stores a keycode in r0 and scancode in r1
+  (IMPLEMENTED) EXIT - successefully terminates a program
 */
 
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "win32_conio.h"
+
 #define int32 int
 #define uint  unsigned int
+#define uchar unsigned char
 
 #define MEMSIZE   1024 //256 bytes
 #define STACKSIZE 1024
@@ -106,8 +121,15 @@ INSTRUCTIONS:
 #define INEGS  0x26
 #define IMVNS  0x27
 
-#define PROC_EXIT  0x10
-#define PROC_PRINT 0x11
+#define SVC_OS 0x10
+
+#define PROC_EXIT   0x01
+#define PROC_PUTC   0x02
+#define PROC_PUTCXY 0x03
+#define PROC_GETC   0x04
+#define PROC_GETCXY 0x05
+#define PROC_SETCUR 0x06
+#define PROC_GETCUR 0x07
 
 struct _vm{
   int32 r[0x10];
@@ -125,32 +147,22 @@ inline void updflags_nzcv();
 int main()
 {
   int32 code[] = {
-    /*ILDR, 0x1, 0x30,
-    IMOV, 0x0, 0x1,
-    IB, 0x13,
-    ISVC, PROC_PRINT,
+    ILDR, 0x0, 0x03,
+    ILDR, 0x1, 0x01,
+    ILDR, 0x4, PROC_SETCUR,
+    ISVC, SVC_OS,
+    ILDR, 0x4, PROC_GETC,
+    ISVC, SVC_OS,
     IPUSH, 0x0,
-    IADD, 0x0, 0x01,
-    ISVC, PROC_PRINT,
+    ILDR, 0x0, 30,
+    ILDR, 0x1, 16,
+    ILDR, 0x4, PROC_SETCUR,
+    ISVC, SVC_OS,
     IPOP, 0x0,
-    ISVC, PROC_PRINT,*/
-    
-    /*ILDR, 0x5, 0x31,
-    ISTR, 0x41, 0x5,
-    ILDRM, 0x0, 0x41,
-    ISVC, PROC_PRINT,*/
-    
-    /*ILDR, 0x0, 0x31,
-    ILDR, 0x2, 0x02,
-    //ILDR, 0x1, 0x01,
-    INOP, INOP, INOP,
-    ILSRS, 0x2, 0x1,
-    IBCS, 0x13,*/
-    
-    ILDR, 0x0, 0xFFFFFFCF,
-    INEGS, 0x0,
-    ISVC, PROC_PRINT,
-    ISVC, PROC_EXIT
+    ILDR, 0x4, PROC_PUTC,
+    ISVC, SVC_OS,
+    ILDR, 0x4, PROC_EXIT,
+    ISVC, SVC_OS
   };
   
   vm.mem   = (int32 *)malloc(MEMSIZE);
@@ -443,15 +455,62 @@ int main()
       } break;
       
       case ISVC:{
-        int32 proc = vm.code[ vm.r[0xF]++ ];
+        int32 call = vm.code[ vm.r[0xF]++ ];
+        int32 proc = vm.r[0x4];
         
-        switch(proc){
-          case PROC_PRINT:{
-            printf("%c", vm.r[0x0]);
-          } break;
-          
-          case PROC_EXIT:{
-            running = 0x0;
+        switch(call){
+          case SVC_OS:{
+            switch(proc){
+              case PROC_PUTC:{
+                uchar ch = (uchar)vm.r[0x0];
+                
+                putch(ch);
+              } break;
+              
+              case PROC_PUTCXY:{
+                uchar ch = (uchar)vm.r[0x2];
+                short x = (short)vm.r[0x0];
+                short y = (short)vm.r[0x1];
+                
+                putchxy(ch, x, y);
+              } break;
+              
+              case PROC_GETC:{
+                uchar ch;
+                
+                getch(&ch);
+                vm.r[0x0] = (int32)ch;
+              } break;
+              
+              case PROC_GETCXY:{
+                uchar ch;
+                short x = (short)vm.r[0x0];
+                short y = (short)vm.r[0x1];
+                
+                getchxy(&ch, x, y);
+                vm.r[0x0] = (int32)ch;
+              } break;
+              
+              case PROC_SETCUR:{
+                short x = (short)vm.r[0x0];
+                short y = (short)vm.r[0x1];
+                
+                gotoxy(x, y);
+              } break;
+              
+              case PROC_GETCUR:{
+                short x;
+                short y;
+                
+                getxy(&x, &y);
+                vm.r[0x0] = (int32)x;
+                vm.r[0x1] = (int32)y;
+              } break;
+              
+              case PROC_EXIT:{
+                running = 0x0;
+              } break;
+            }
           } break;
         }
       } break;
