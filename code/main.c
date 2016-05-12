@@ -58,13 +58,18 @@ INSTRUCTIONS:
 PROCEDURES (HACKED):
   OS supervisor calls:
   
-  (IMPLEMENTED) PUTC - writes character from r0 to a console at current position
+  (IMPLEMENTED) PUTC - writes character from r0 to a console at current position and moves a carret
   (IMPLEMENTED) PUTCXY - writes character from r2 to a console at x = r0 and y = r1 (x, y are lower 8 bits)
-  (IMPLEMENTED) GETC - reads character from a console at current position and stores it in r0
+  (IMPLEMENTED) GETC - reads character from a console at current position and stores it in r0 and moves a carret
   (IMPLEMENTED) GETCXY - reads character from a console at x = r0 and y = r1 and stores it in r0 (x, y are lower 8 bits)
   (IMPLEMENTED) SETCUR - sets a console cursor position at x = r0 and y = r1 (x, y are lower 8 bits)
   (IMPLEMENTED) GETCUR - gets a console cursor position and stores it in r0 = x and r1 = y
-  GETKEY - waits for a keypress and stores a keycode in r0 and scancode in r1
+  (IMPLEMENTED) GETKEY - check for a keypress and stores a keycode in r0, scancode in r1 and state in r2 (non 0 - released, 0 - pressed)
+  (IMPLEMENTED) CLSSCR - clears a console area (no attributes applied)
+  (IMPLEMENTED) CURVIS - sets visibility of a console cursor based on value of r0 (0 - hidden, 1 - visible)
+  (IMPLEMENTED) GETCP - gets an id of a code page that a console uses and stores input cp in r0 and output cp in r1
+  (IMPLEMENTED) SETCP - sets a code page for a console with id = r0 for input cp and id = r1 for output cp
+  (IMPLEMENTED) GETCS - gets a console size and stores width in r0 and height in r1 (not zero based!)
   (IMPLEMENTED) EXIT - successefully terminates a program
 */
 
@@ -73,7 +78,7 @@ PROCEDURES (HACKED):
 
 #include "win32_conio.h"
 
-#define int32 int
+#define int32 __int32
 #define uint  unsigned int
 #define uchar unsigned char
 
@@ -130,6 +135,12 @@ PROCEDURES (HACKED):
 #define PROC_GETCXY 0x05
 #define PROC_SETCUR 0x06
 #define PROC_GETCUR 0x07
+#define PROC_CLSSCR 0x08
+#define PROC_GETKEY 0x09
+#define PROC_CURVIS 0x0A
+#define PROC_GETCP  0x0B
+#define PROC_SETCP  0x0C
+#define PROC_GETCS  0x0D
 
 struct _vm{
   int32 r[0x10];
@@ -147,7 +158,7 @@ inline void updflags_nzcv();
 int main()
 {
   int32 code[] = {
-    ILDR, 0x0, 0x03,
+    /*ILDR, 0x0, 0x03,
     ILDR, 0x1, 0x01,
     ILDR, 0x4, PROC_SETCUR,
     ISVC, SVC_OS,
@@ -160,7 +171,37 @@ int main()
     ISVC, SVC_OS,
     IPOP, 0x0,
     ILDR, 0x4, PROC_PUTC,
+    ISVC, SVC_OS,*/
+    
+    /*ILDR, 0x4, PROC_CLSSCR,
     ISVC, SVC_OS,
+    ILDR, 0x0, 0x30,
+    ILDR, 0x4, PROC_PUTC,
+    ISVC, SVC_OS,*/
+    
+    //437 by default
+    /*ILDR, 0x0, 866,
+    IMOV, 0x1, 0x0,
+    ILDR, 0x4, PROC_SETCP,
+    ISVC, SVC_OS,
+    ILDR, 0x4, PROC_GETCS,
+    ISVC, SVC_OS,
+    ILDR, 0x1, 1,
+    ISUB, 0x0, 0x1,
+    ILDR, 0x4, PROC_SETCUR,
+    ISVC, SVC_OS,
+    ILDR, 0x0, 0xA6,
+    ILDR, 0x4, PROC_PUTC,
+    ISVC, SVC_OS,*/
+    
+    ILDR, 0x4, PROC_GETKEY,
+    ISVC, SVC_OS,
+    
+    ILDR, 0x5, 0x0D,
+    ICMP, 0x0, 0x5,
+    IBEQ, 15,
+    IB, 0,
+    
     ILDR, 0x4, PROC_EXIT,
     ISVC, SVC_OS
   };
@@ -344,12 +385,12 @@ int main()
       } break;
       
       case IB:{
-        vm.r[0xF] = vm.code[ ++vm.r[0xF] ];
+        vm.r[0xF] = vm.code[ vm.r[0xF] ];
       } break;
       
       case IBEQ:{
         if( vm.flags & 0x40000000 ){
-          vm.r[0xF] = vm.code[ ++vm.r[0xF] ];
+          vm.r[0xF] = vm.code[ vm.r[0xF] ];
         } else{
           vm.r[0xF]++;
         }
@@ -359,13 +400,13 @@ int main()
         if( vm.flags & 0x40000000 ){
           vm.r[0xF]++;
         } else{
-          vm.r[0xF] = vm.code[ ++vm.r[0xF] ];
+          vm.r[0xF] = vm.code[ vm.r[0xF] ];
         }
       } break;
       
       case IBMI:{
         if( vm.flags & 0x80000000 ){
-          vm.r[0xF] = vm.code[ ++vm.r[0xF] ];
+          vm.r[0xF] = vm.code[ vm.r[0xF] ];
         } else{
           vm.r[0xF]++;
         }
@@ -375,7 +416,7 @@ int main()
         if( vm.flags & 0x80000000 ){
           vm.r[0xF]++;
         } else{
-          vm.r[0xF] = vm.code[ ++vm.r[0xF] ];
+          vm.r[0xF] = vm.code[ vm.r[0xF] ];
         }
       } break;
       
@@ -386,7 +427,7 @@ int main()
       case IBGE:{
         if( (vm.flags & 0x40000000) ||
            !(vm.flags & 0x80000000) ){
-          vm.r[0xF] = vm.code[ ++vm.r[0xF] ];
+          vm.r[0xF] = vm.code[ vm.r[0xF] ];
         } else{
           vm.r[0xF]++;
         }
@@ -396,7 +437,7 @@ int main()
       case IBLT:{
         if( !(vm.flags & 0x40000000) &&
              (vm.flags & 0x80000000) ){
-          vm.r[0xF] = vm.code[ ++vm.r[0xF] ];
+          vm.r[0xF] = vm.code[ vm.r[0xF] ];
         } else{
           vm.r[0xF]++;
         }
@@ -406,7 +447,7 @@ int main()
       case IBGT:{
         if( !(vm.flags & 0x40000000) &&
             !(vm.flags & 0x80000000) ){
-          vm.r[0xF] = vm.code[ ++vm.r[0xF] ];
+          vm.r[0xF] = vm.code[ vm.r[0xF] ];
         } else{
           vm.r[0xF]++;
         }
@@ -416,7 +457,7 @@ int main()
       case IBLE:{
         if( (vm.flags & 0x40000000) ||
             (vm.flags & 0x80000000) ){
-          vm.r[0xF] = vm.code[ ++vm.r[0xF] ];
+          vm.r[0xF] = vm.code[ vm.r[0xF] ];
         } else{
           vm.r[0xF]++;
         }
@@ -424,7 +465,7 @@ int main()
       
       case IBCS:{
         if( vm.flags & 0x20000000 ){
-          vm.r[0xF] = vm.code[ ++vm.r[0xF] ];
+          vm.r[0xF] = vm.code[ vm.r[0xF] ];
         } else{
           vm.r[0xF]++;
         }
@@ -434,13 +475,13 @@ int main()
         if( vm.flags & 0x20000000 ){
           vm.r[0xF]++;
         } else{
-          vm.r[0xF] = vm.code[ ++vm.r[0xF] ];
+          vm.r[0xF] = vm.code[ vm.r[0xF] ];
         }
       } break;
       
       case IBVS:{
         if( vm.flags & 0x10000000 ){
-          vm.r[0xF] = vm.code[ ++vm.r[0xF] ];
+          vm.r[0xF] = vm.code[ vm.r[0xF] ];
         } else{
           vm.r[0xF]++;
         }
@@ -450,7 +491,7 @@ int main()
         if( vm.flags & 0x10000000 ){
           vm.r[0xF]++;
         } else{
-          vm.r[0xF] = vm.code[ ++vm.r[0xF] ];
+          vm.r[0xF] = vm.code[ vm.r[0xF] ];
         }
       } break;
       
@@ -505,6 +546,51 @@ int main()
                 getxy(&x, &y);
                 vm.r[0x0] = (int32)x;
                 vm.r[0x1] = (int32)y;
+              } break;
+              
+              case PROC_CLSSCR:{
+                clsscr();
+              } break;
+              
+              case PROC_GETKEY:{
+                uchar keycode;
+                uchar scancode;
+                short state;
+                
+                getkey(&keycode, &scancode, &state);
+                vm.r[0x0] = (int32)keycode;
+                vm.r[0x1] = (int32)scancode;
+                vm.r[0x2] = (int32)state;
+              } break;
+              
+              case PROC_GETCP:{
+                uint incp;
+                uint outcp;
+                
+                getcodepage(&incp, &outcp);
+                vm.r[0x0] = (int32)incp;
+                vm.r[0x1] = (int32)outcp;
+              } break;
+              
+              case PROC_SETCP:{
+                uint incp = (uint)vm.r[0x0];
+                uint outcp = (uint)vm.r[0x1];
+                
+                setcodepage(incp, outcp);
+              } break;
+              
+              case PROC_GETCS:{
+                short width;
+                short height;
+                
+                getconsize(&width, &height);
+                vm.r[0x0] = (int32)width;
+                vm.r[0x1] = (int32)height;
+              } break;
+              
+              case PROC_CURVIS:{
+                int state = vm.r[0x0];
+                setcurstate(state);
               } break;
               
               case PROC_EXIT:{
