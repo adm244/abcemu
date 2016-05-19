@@ -1,5 +1,4 @@
 #include "win32_conio.h"
-#include <stdio.h>
 
 void gotoxy(short x, short y)
 {
@@ -90,6 +89,11 @@ void getconsize(short *width, short *height)
   *height = bufinfo.dwSize.Y;
 }
 
+void printstr(unsigned char *str)
+{
+  //TODO(adm244): implement this
+}
+
 void clsscr()
 {
   HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -132,11 +136,11 @@ void setcodepage(unsigned int incp, unsigned int outcp)
 void getkey(unsigned char *keycode, unsigned char *scancode, short *state)
 {
   HANDLE console = GetStdHandle(STD_INPUT_HANDLE);
-  INPUT_RECORD inputbuf[10];
+  INPUT_RECORD inputbuf[1];
   DWORD eventsread;
   short i;
   
-  ReadConsoleInput(console, inputbuf, 10, &eventsread);
+  ReadConsoleInput(console, inputbuf, 1, &eventsread);
   
   for( i = eventsread-1; i >= 0; i-- ){
     KEY_EVENT_RECORD keyinfo;
@@ -146,6 +150,8 @@ void getkey(unsigned char *keycode, unsigned char *scancode, short *state)
       *state = keyinfo.bKeyDown;
       *keycode  = keyinfo.wVirtualKeyCode;
       *scancode = keyinfo.wVirtualScanCode;
+      
+      break;
     }
   }
 }

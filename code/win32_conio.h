@@ -14,6 +14,8 @@ void putch(unsigned char ch);
 
 void getconsize(short *width, short *height);
 
+void printstr(unsigned char *str);
+
 void clsscr();
 void setcurstate(int visible);
 
