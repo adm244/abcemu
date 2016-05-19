@@ -1,11 +1,11 @@
 begin:
-ldr 4, 9
+ldr 0x4, 9
 svc 16
 
-cmpi 0, 19
+cmpi 0, 0x13
 beq exit
 b begin
 
 exit:
-ldr 4, 1
-svc 16
+ldr 0x4, 1
+svc 0x10
